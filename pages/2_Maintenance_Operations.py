@@ -10,7 +10,8 @@ import sys
 # Add parent directory to path for imports
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from kpi_calculations import calculate_mttr, calculate_mtbf
+from kpi_calculations import calculate_mttr, calculate_mtbf, calculate_schedule_compliance
+from advanced_analytics import predict_failure_probability
 from styles import (
     inject_custom_css, COLORS, format_currency, style_plotly_chart,
     section_header
@@ -43,10 +44,16 @@ def load_data():
     # Merge for analysis
     df = pd.merge(df_wo, df_equip, on="EquipmentID")
     df = pd.merge(df, df_tech, on="TechnicianID")
-    return df, df_equip
+    
+    try:
+        df_sensor = pd.read_csv(os.path.join(DATA_DIR, "Fact_Sensor_Readings.csv"))
+    except:
+        df_sensor = pd.DataFrame()
+        
+    return df, df_equip, df_sensor
 
 
-df, df_equip = load_data()
+df, df_equip, df_sensor = load_data()
 
 # =============================================================================
 # SIDEBAR FILTERS
@@ -87,7 +94,7 @@ if len(date_range) == 2:
 st.markdown("---")
 section_header("Maintenance KPIs", "📊")
 
-col1, col2, col3, col4, col5 = st.columns(5)
+col1, col2, col3, col4, col5, col6 = st.columns(6)
 
 breakdown_df = df[df['MaintenanceType'] == 'Breakdown']
 preventive_df = df[df['MaintenanceType'] == 'Preventive']
@@ -113,6 +120,64 @@ with col4:
 with col5:
     total_cost = df['TotalCost'].sum()
     st.metric("Total Cost", format_currency(total_cost))
+
+with col6:
+    compliance = calculate_schedule_compliance(df)
+    st.metric(
+        "Schedule Compliance", 
+        f"{compliance['Compliance_Pct']:.1f}%",
+        delta=f"{compliance['Late_Count']} Late WOs",
+        delta_color="inverse"
+    )
+
+# =============================================================================
+# PROACTIVE MAINTENANCE (NEW)
+# =============================================================================
+if not df_sensor.empty:
+    st.markdown("---")
+    section_header("Proactive Maintenance Alerts", "🛡️")
+    
+    col_pred_1, col_pred_2 = st.columns([2, 1])
+    
+    with col_pred_1:
+        st.subheader("Predictive Failure Analysis")
+        
+        health_df = predict_failure_probability(df_sensor)
+        health_df = health_df.merge(df_equip[['EquipmentID', 'EquipmentName']], on='EquipmentID', how='left')
+        
+        risky_eq = health_df[health_df['Failure_Probability'] > 20].sort_values('Failure_Probability', ascending=False)
+        
+        if not risky_eq.empty:
+            st.dataframe(
+                risky_eq[['EquipmentName', 'Failure_Probability', 'Avg_Temp', 'Max_Vibration', 'Insight']],
+                use_container_width=True,
+                hide_index=True,
+                column_config={
+                    "Failure_Probability": st.column_config.ProgressColumn(
+                        "Risk Probability",
+                        format="%.1f%%",
+                        min_value=0,
+                        max_value=100,
+                    ),
+                    "Avg_Temp": st.column_config.NumberColumn("Avg Temp (°C)"),
+                    "Max_Vibration": st.column_config.NumberColumn("Vibration (mm/s)")
+                }
+            )
+        else:
+            st.success("✅ No high-risk equipment detected by predictive models.")
+            
+    with col_pred_2:
+        st.subheader("Risk Distribution")
+        if not health_df.empty:
+            fig_pie = px.pie(
+                health_df,
+                names='Status',
+                color='Status',
+                color_discrete_map={'Healthy': COLORS['success'], 'Warning': COLORS['warning'], 'Critical': COLORS['danger']},
+                hole=0.5
+            )
+            fig_pie.update_layout(height=250, margin=dict(t=0, b=0, l=0, r=0))
+            st.plotly_chart(fig_pie, use_container_width=True)
 
 # =============================================================================
 # PARETO ANALYSIS

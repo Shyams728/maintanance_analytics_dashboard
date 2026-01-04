@@ -2,6 +2,7 @@ import pandas as pd
 import random
 import os
 from datetime import datetime, timedelta
+import numpy as np
 
 # Configuration
 OUTPUT_DIR = "d:/data_science/power_bi/data"
@@ -49,13 +50,13 @@ df_equipment = pd.DataFrame(equipment)
 df_equipment.to_csv(f"{OUTPUT_DIR}/Dim_Equipment.csv", index=False)
 print("Generated Dim_Equipment.csv")
 
-# 3. Dim_Vendor
+# 3. Dim_Vendor (Enriched)
 vendors = [
-    {"VendorID": "V001", "VendorName": "Global Spares Ltd", "Rating": 4.5, "PaymentTerms": "Net 30", "Category": "Parts Supplier"},
-    {"VendorID": "V002", "VendorName": "Industrial Lubes Co", "Rating": 3.8, "PaymentTerms": "Net 45", "Category": "Consumables"},
-    {"VendorID": "V003", "VendorName": "Heavy Mech Services", "Rating": 4.8, "PaymentTerms": "Net 15", "Category": "Service Provider"},
-    {"VendorID": "V004", "VendorName": "Safety First Supplies", "Rating": 4.2, "PaymentTerms": "Net 30", "Category": "Safety Equipment"},
-    {"VendorID": "V005", "VendorName": "TechEquip Solutions", "Rating": 3.5, "PaymentTerms": "Net 60", "Category": "Equipment Dealer"},
+    {"VendorID": "V001", "VendorName": "Global Spares Ltd", "Rating": 4.5, "PaymentTerms": "Net 30", "Category": "Parts Supplier", "AvgDeliveryDelay": 2, "QualityScore": 95},
+    {"VendorID": "V002", "VendorName": "Industrial Lubes Co", "Rating": 3.8, "PaymentTerms": "Net 45", "Category": "Consumables", "AvgDeliveryDelay": 5, "QualityScore": 88},
+    {"VendorID": "V003", "VendorName": "Heavy Mech Services", "Rating": 4.8, "PaymentTerms": "Net 15", "Category": "Service Provider", "AvgDeliveryDelay": 0, "QualityScore": 98},
+    {"VendorID": "V004", "VendorName": "Safety First Supplies", "Rating": 4.2, "PaymentTerms": "Net 30", "Category": "Safety Equipment", "AvgDeliveryDelay": 1, "QualityScore": 92},
+    {"VendorID": "V005", "VendorName": "TechEquip Solutions", "Rating": 3.5, "PaymentTerms": "Net 60", "Category": "Equipment Dealer", "AvgDeliveryDelay": 8, "QualityScore": 80},
 ]
 df_vendor = pd.DataFrame(vendors)
 df_vendor.to_csv(f"{OUTPUT_DIR}/Dim_Vendor.csv", index=False)
@@ -133,7 +134,7 @@ df_inv = pd.DataFrame(transactions)
 df_inv.to_csv(f"{OUTPUT_DIR}/Fact_Inventory_Transactions.csv", index=False)
 print("Generated Fact_Inventory_Transactions.csv")
 
-# 6. Fact_Maintenance_WorkOrders
+# 6. Fact_Maintenance_WorkOrders (Enriched with Delays)
 work_orders = []
 wo_id = 1
 current_date = START_DATE
@@ -152,6 +153,7 @@ while current_date <= END_DATE:
             labor_hours = random.uniform(2, 6)
             parts_cost = random.randint(500, 2000)
             failure_code = ""
+            # Scheduled date logic
             scheduled_date = current_date - timedelta(days=random.randint(1, 7))
         else:
             m_type = "Breakdown"
@@ -159,10 +161,15 @@ while current_date <= END_DATE:
             labor_hours = random.uniform(4, 20)
             parts_cost = random.randint(5000, 25000)
             failure_code = random.choice(failure_codes)
-            scheduled_date = ""
+            scheduled_date = None
             
         labor_cost = labor_hours * tech["HourlyRate"]
         total_cost = parts_cost + labor_cost
+        
+        # New: Simulate Delays
+        delay_min = 0
+        if random.random() < 0.2: # 20% chance of delay
+            delay_min = random.randint(30, 240)
             
         work_orders.append({
             "WorkOrderID": f"WO{wo_id:05d}",
@@ -176,7 +183,9 @@ while current_date <= END_DATE:
             "LaborHours": round(labor_hours, 2),
             "PartsCost": round(parts_cost, 2),
             "LaborCost": round(labor_cost, 2),
-            "TotalCost": round(total_cost, 2)
+            "TotalCost": round(total_cost, 2),
+            "DelayMinutes": delay_min,
+            "RestockingDelay": 1 if delay_min > 60 else 0
         })
         wo_id += 1
     current_date += timedelta(days=1)
@@ -216,3 +225,37 @@ while current_month <= END_DATE:
 df_budget = pd.DataFrame(budget_data)
 df_budget.to_csv(f"{OUTPUT_DIR}/Fact_Budget_vs_Actual.csv", index=False)
 print("Generated Fact_Budget_vs_Actual.csv")
+
+# 8. Fact_Sensor_Readings (NEW)
+# Simulating hourly readings for key equipment
+sensor_readings = []
+sensor_start = END_DATE - timedelta(days=90) # Last 90 days only to keep size manageable
+
+print("Generating Sensor Data...")
+eq_list = [e for e in equipment if e["Criticality"] == "High"]
+current_ts = sensor_start
+
+while current_ts <= END_DATE:
+    for eq in eq_list:
+        # Base healthy values
+        temp = 75 + random.uniform(-5, 5) # C
+        vibration = 2.5 + random.uniform(-0.5, 0.5) # mm/s
+        
+        # Inject anomalies occasionally
+        if random.random() < 0.05:
+            temp += random.uniform(10, 30)
+        if random.random() < 0.05:
+            vibration += random.uniform(2, 5)
+            
+        sensor_readings.append({
+            "Timestamp": current_ts.strftime("%Y-%m-%d %H:%M:%S"),
+            "EquipmentID": eq["EquipmentID"],
+            "Temperature_C": round(temp, 1),
+            "Vibration_mm_s": round(vibration, 2),
+            "Status": "Alert" if temp > 100 or vibration > 6 else "Normal"
+        })
+    current_ts += timedelta(hours=4) # Every 4 hours
+
+df_sensor = pd.DataFrame(sensor_readings)
+df_sensor.to_csv(f"{OUTPUT_DIR}/Fact_Sensor_Readings.csv", index=False)
+print("Generated Fact_Sensor_Readings.csv")

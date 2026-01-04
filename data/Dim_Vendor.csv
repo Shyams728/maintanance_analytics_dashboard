@@ -1,6 +1,6 @@
-VendorID,VendorName,Rating,PaymentTerms,Category
-V001,Global Spares Ltd,4.5,Net 30,Parts Supplier
-V002,Industrial Lubes Co,3.8,Net 45,Consumables
-V003,Heavy Mech Services,4.8,Net 15,Service Provider
-V004,Safety First Supplies,4.2,Net 30,Safety Equipment
-V005,TechEquip Solutions,3.5,Net 60,Equipment Dealer
+VendorID,VendorName,Rating,PaymentTerms,Category,AvgDeliveryDelay,QualityScore
+V001,Global Spares Ltd,4.5,Net 30,Parts Supplier,2,95
+V002,Industrial Lubes Co,3.8,Net 45,Consumables,5,88
+V003,Heavy Mech Services,4.8,Net 15,Service Provider,0,98
+V004,Safety First Supplies,4.2,Net 30,Safety Equipment,1,92
+V005,TechEquip Solutions,3.5,Net 60,Equipment Dealer,8,80

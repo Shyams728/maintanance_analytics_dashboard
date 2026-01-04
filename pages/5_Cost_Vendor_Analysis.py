@@ -10,6 +10,7 @@ import sys
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from kpi_calculations import calculate_payment_variance, calculate_budget_adherence
+from advanced_analytics import calculate_vendor_score
 from styles import (
     inject_custom_css, COLORS, format_currency, style_plotly_chart,
     section_header
@@ -129,64 +130,86 @@ st.markdown("---")
 col_left, col_right = st.columns(2)
 
 with col_left:
-    section_header("Vendor Payment Variance", "📊")
+    section_header("Vendor Reliability Quadrant", "🎯")
     
-    # Filter by selected vendor if not All
-    display_variance = payment_variance if selected_vendor == "All" else \
-        payment_variance[payment_variance['VendorName'] == selected_vendor]
+    # Calculate scores
+    vendor_scores = calculate_vendor_score(df_vendor)
     
-    fig = go.Figure()
-    
-    fig.add_trace(go.Bar(
-        name='Contract Value',
-        x=display_variance['VendorName'],
-        y=display_variance['Total_Contract'],
-        marker_color=COLORS['primary_light']
-    ))
-    
-    fig.add_trace(go.Bar(
-        name='Actual Payment',
-        x=display_variance['VendorName'],
-        y=display_variance['Total_Actual'],
-        marker_color=COLORS['primary_dark']
-    ))
-    
-    fig.update_layout(
-        barmode='group',
-        xaxis_title="Vendor",
-        yaxis_title="Amount (₹)",
-        legend=dict(orientation='h', yanchor='bottom', y=1.02)
+    # Merge with payment variance to get cost data
+    vendor_analysis = payment_variance.merge(
+        vendor_scores[['VendorID', 'CompositeScore', 'VendorTier', 'AvgDeliveryDelay', 'QualityScore']], 
+        on='VendorID',
+        how='left'
     )
     
-    fig = style_plotly_chart(fig, height=350)
-    st.plotly_chart(fig, use_container_width=True)
+    # Filter by selected vendor if needed
+    if selected_vendor != "All":
+        vendor_analysis = vendor_analysis[vendor_analysis['VendorName'] == selected_vendor]
+
+    if not vendor_analysis.empty:
+        fig = px.scatter(
+            vendor_analysis,
+            x='Total_Actual',
+            y='CompositeScore',
+            size='Total_Contract',
+            color='VendorTier',
+            hover_name='VendorName',
+            text='VendorName',
+            color_discrete_map={
+                'Strategic Partner': COLORS['success'],
+                'Preferred': COLORS['primary'],
+                'Standard': COLORS['warning'],
+                'At Risk': COLORS['danger']
+            },
+            labels={'Total_Actual': 'Total Spend (₹)', 'CompositeScore': 'Reliability Score (0-100)'}
+        )
+        
+        # Add Quadrant Background
+        fig.add_hline(y=75, line_dash="dash", line_color=COLORS['gray'], annotation_text="High Reliability")
+        fig.add_vline(x=vendor_analysis['Total_Actual'].median(), line_dash="dash", line_color=COLORS['gray'], annotation_text="Median Spend")
+        
+        fig.update_traces(textposition='top center')
+        fig.update_layout(
+            legend=dict(orientation='h', yanchor='bottom', y=1.02)
+        )
+        
+        fig = style_plotly_chart(fig, height=400)
+        st.plotly_chart(fig, use_container_width=True)
+    else:
+        st.info("No vendor data available for analysis.")
 
 with col_right:
-    section_header("Vendor Scorecard", "⭐")
+    section_header("Strategic Vendor Scorecard", "🏆")
     
-    # Create vendor scorecard
-    scorecard = payment_variance[['VendorName', 'Rating', 'Category', 
-                                   'Total_Contract', 'Variance_Pct', 'Status']].copy()
-    
-    scorecard['Contract'] = scorecard['Total_Contract'].apply(format_currency)
-    scorecard['Variance'] = scorecard['Variance_Pct'].apply(lambda x: f"{x:+.1f}%")
-    
-    # Color code status
-    def get_status_emoji(status):
-        if status == 'Over Budget':
-            return '🔴 ' + status
-        elif status == 'Under Budget':
-            return '🟢 ' + status
-        else:
-            return '🟡 ' + status
-    
-    scorecard['Status'] = scorecard['Status'].apply(get_status_emoji)
-    
-    st.dataframe(
-        scorecard[['VendorName', 'Rating', 'Category', 'Contract', 'Variance', 'Status']],
-        use_container_width=True,
-        hide_index=True
-    )
+    if not vendor_analysis.empty:
+        # Prepare scorecard columns
+        scorecard = vendor_analysis[[
+            'VendorName', 'VendorTier', 'CompositeScore', 
+            'AvgDeliveryDelay', 'QualityScore', 'Variance_Pct'
+        ]].copy()
+        
+        scorecard = scorecard.sort_values('CompositeScore', ascending=False)
+        
+        st.dataframe(
+            scorecard,
+            use_container_width=True,
+            hide_index=True,
+            column_config={
+                "VendorName": "Vendor",
+                "VendorTier": "Tier",
+                "CompositeScore": st.column_config.ProgressColumn(
+                    "Reliability Score",
+                    format="%.1f",
+                    min_value=0,
+                    max_value=100,
+                ),
+                "AvgDeliveryDelay": st.column_config.NumberColumn("Avg Delay (Days)"),
+                "QualityScore": st.column_config.NumberColumn("Quality %"),
+                "Variance_Pct": st.column_config.NumberColumn("Cost Var %", format="%.1f%%")
+            }
+        )
+    else:
+        st.info("No scorecard data available.")
 
 # =============================================================================
 # BUDGET ANALYSIS

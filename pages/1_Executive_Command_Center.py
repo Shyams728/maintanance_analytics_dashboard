@@ -14,6 +14,7 @@ from kpi_calculations import (
     calculate_mttr, calculate_mtbf, calculate_equipment_availability,
     calculate_maintenance_mix, get_executive_summary
 )
+from advanced_analytics import predict_failure_probability, forecast_maintenance_costs
 from styles import (
     inject_custom_css, COLORS, format_currency, style_plotly_chart,
     get_gauge_color, section_header
@@ -48,11 +49,16 @@ def load_data():
     
     df_equip = pd.read_csv(os.path.join(DATA_DIR, "Dim_Equipment.csv"))
     
-    return df_wo, df_prod, df_budget, df_equip
+    try:
+        df_sensor = pd.read_csv(os.path.join(DATA_DIR, "Fact_Sensor_Readings.csv"))
+    except:
+        df_sensor = pd.DataFrame()
+    
+    return df_wo, df_prod, df_budget, df_equip, df_sensor
 
 
 try:
-    df_wo, df_prod, df_budget, df_equip = load_data()
+    df_wo, df_prod, df_budget, df_equip, df_sensor = load_data()
 except FileNotFoundError as e:
     st.error(f"Data not found: {e}. Please run `python preprocess_data.py` first.")
     st.stop()
@@ -146,6 +152,59 @@ with col5:
     )
 
 # =============================================================================
+# PLANT HEALTH HEATMAP (NEW)
+# =============================================================================
+if not df_sensor.empty:
+    st.markdown("---")
+    section_header("Plant Health Insights", "🏥")
+    
+    # Calculate failure probability
+    health_data = predict_failure_probability(df_sensor)
+    
+    # Merge with equipment names
+    health_data = health_data.merge(df_equip[['EquipmentID', 'EquipmentName']], on='EquipmentID', how='left')
+    
+    col_map, col_details = st.columns([1, 1])
+    
+    with col_map:
+        st.subheader("Equipment Condition Heatmap")
+        
+        fig_heat = px.scatter(
+            health_data,
+            x='Avg_Temp',
+            y='Max_Vibration',
+            size='Failure_Probability',
+            color='Failure_Probability',
+            hover_name='EquipmentName',
+            text='EquipmentName',
+            color_continuous_scale=['green', 'yellow', 'red'],
+            range_color=[0, 100],
+            labels={'Avg_Temp': 'Avg Temperature (°C)', 'Max_Vibration': 'Max Vibration (mm/s)', 'Failure_Probability': 'Failure Risk %'}
+        )
+        
+        fig_heat.update_traces(textposition='top center')
+        fig_heat.update_layout(
+            height=400,
+            xaxis=dict(showgrid=True, zeroline=False),
+            yaxis=dict(showgrid=True, zeroline=False)
+        )
+        
+        st.plotly_chart(fig_heat, use_container_width=True)
+        
+    with col_details:
+        st.subheader("⚠️ Predictive Alerts")
+        alerts = health_data[health_data['Status'] != 'Healthy'].sort_values('Failure_Probability', ascending=False)
+        
+        if not alerts.empty:
+            for _, row in alerts.iterrows():
+                if row['Status'] == 'Critical':
+                    st.error(f"**{row['EquipmentName']}**: {row['Insight']} (Risk: {row['Failure_Probability']}%)")
+                else:
+                    st.warning(f"**{row['EquipmentName']}**: {row['Insight']} (Risk: {row['Failure_Probability']}%)")
+        else:
+            st.success("All monitored equipment operating within normal parameters.")
+
+# =============================================================================
 # SECOND ROW - MINI METRICS
 # =============================================================================
 
@@ -197,29 +256,72 @@ with col_left:
     budget_monthly['Variance'] = budget_monthly['ActualAmount'] - budget_monthly['BudgetAmount']
     budget_monthly['Variance_Pct'] = (budget_monthly['Variance'] / budget_monthly['BudgetAmount']) * 100
     
+    chart_data = budget_monthly.copy()
+    
+    # Add Forecast
+    forecast = forecast_maintenance_costs(df_budget)
+    forecast['Date'] = forecast['Date'].astype(str)
+    
+    # Plot
     fig = go.Figure()
     
+    # Budget Bar
     fig.add_trace(go.Bar(
         name='Budget', 
-        x=budget_monthly['Date'], 
-        y=budget_monthly['BudgetAmount'],
+        x=chart_data['Date'], 
+        y=chart_data['BudgetAmount'],
         marker_color=COLORS['primary_light'],
-        opacity=0.7
+        opacity=0.5
     ))
     
+    # Actual Line
     fig.add_trace(go.Scatter(
         name='Actual', 
-        x=budget_monthly['Date'], 
-        y=budget_monthly['ActualAmount'], 
+        x=chart_data['Date'], 
+        y=chart_data['ActualAmount'], 
         mode='lines+markers',
         line=dict(color=COLORS['primary_dark'], width=3),
         marker=dict(size=8)
     ))
     
+    # Forecast Line
+    fig.add_trace(go.Scatter(
+        name='Forecast',
+        x=forecast['Date'],
+        y=forecast['ForecastAmount'],
+        mode='lines+markers',
+        line=dict(color=COLORS['warning'], width=3, dash='dash'),
+        marker=dict(symbol='star', size=8)
+    ))
+    
+    # Forecast Confidence Interval
+    fig.add_trace(go.Scatter(
+        name='Upper Bound',
+        x=forecast['Date'],
+        y=forecast['UpperBound'],
+        mode='lines',
+        marker=dict(color="#444"),
+        line=dict(width=0),
+        showlegend=False
+    ))
+    
+    fig.add_trace(go.Scatter(
+        name='Lower Bound',
+        x=forecast['Date'],
+        y=forecast['LowerBound'],
+        marker=dict(color="#444"),
+        line=dict(width=0),
+        mode='lines',
+        fillcolor='rgba(243, 156, 18, 0.2)',
+        fill='tonexty',
+        showlegend=False
+    ))
+    
     fig.update_layout(
         barmode='group',
         hovermode='x unified',
-        legend=dict(orientation='h', yanchor='bottom', y=1.02)
+        legend=dict(orientation='h', yanchor='bottom', y=1.02),
+        title="Cost Trend & Forecast"
     )
     
     fig = style_plotly_chart(fig, height=350)

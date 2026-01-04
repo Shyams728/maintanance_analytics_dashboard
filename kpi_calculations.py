@@ -98,6 +98,47 @@ def calculate_equipment_availability(df_wo: pd.DataFrame,
     }
 
 
+def calculate_schedule_compliance(df_wo: pd.DataFrame) -> dict:
+    """
+    Calculate schedule compliance for preventive maintenance.
+    Compliance = (On-Time WOs / Total Scheduled WOs) * 100
+    
+    Args:
+        df_wo: Work orders dataframe
+    
+    Returns:
+        Dictionary with compliance metrics
+    """
+    # Filter for preventive WOs with a schedule date
+    scheduled_wo = df_wo[
+        (df_wo['MaintenanceType'] == 'Preventive') & 
+        (df_wo['ScheduledDate'].notna()) & 
+        (df_wo['ScheduledDate'] != '')
+    ].copy()
+    
+    if scheduled_wo.empty:
+        return {'Compliance_Pct': 100.0, 'Late_Count': 0, 'OnTime_Count': 0, 'Total_Scheduled': 0}
+        
+    scheduled_wo['Date'] = pd.to_datetime(scheduled_wo['Date'])
+    scheduled_wo['ScheduledDate'] = pd.to_datetime(scheduled_wo['ScheduledDate'])
+    
+    # Late if Actual Date > Scheduled Date + 1 day buffer
+    scheduled_wo['IsLate'] = scheduled_wo['Date'] > (scheduled_wo['ScheduledDate'] + pd.Timedelta(days=1))
+    
+    late_count = scheduled_wo['IsLate'].sum()
+    total = len(scheduled_wo)
+    ontime = total - late_count
+    
+    compliance = (ontime / total) * 100
+    
+    return {
+        'Compliance_Pct': round(compliance, 1),
+        'Late_Count': late_count,
+        'OnTime_Count': ontime,
+        'Total_Scheduled': total
+    }
+
+
 def calculate_maintenance_mix(df_wo: pd.DataFrame) -> dict:
     """
     Calculate preventive vs breakdown maintenance ratio.
