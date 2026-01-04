@@ -1,0 +1,7 @@
+EquipmentID,EquipmentName,Type,Manufacturer,Model,InstallDate,Criticality,FunctionalLocation
+EX001,Excavator 20T - Alpha,Heavy Machinery,CAT,320D,2020-05-15,High,Mine_Pit_A
+DT001,Dump Truck 100T - 01,Heavy Machinery,Komatsu,HD785,2021-02-10,High,Haul_Road_1
+CR001,Primary Crusher Unit,Processing Plant,Metso,C120,2019-11-01,High,Crushing_Plant
+CV001,Main Overland Conveyor,Processing Plant,Fenner,CV-2000,2019-12-20,Medium,Transport_Zone
+DR001,Drill Rig X5,Heavy Machinery,Sandvik,D65,2022-06-01,Medium,Mine_Pit_B
+WL001,Wheel Loader 980,Heavy Machinery,CAT,980H,2021-08-15,Medium,Stockpile_Area

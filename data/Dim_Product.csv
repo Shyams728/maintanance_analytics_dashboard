@@ -1,0 +1,9 @@
+ProductID,ProductName,Category,ReorderPoint,SafetyStock,UnitCost,LeadTimeDays,MOQ,ABC_Class,UnitWeight,MaterialGroup,CurrentStock
+P001,Hydraulic Pump X200,Spare,5,2,5000,15,1,A,25.5,Hydraulics,3
+P002,Engine Oil 15W40 (L),Consumable,50,20,500,3,20,C,0.9,Lubricants,64
+P003,Conveyor Belt (m),Spare,10,5,1500,10,10,B,5.0,Conveyors,8
+P004,Bearing 6205-2RS,Spare,20,8,200,5,10,C,0.2,Bearings,11
+P005,Air Filter AF-99,Consumable,15,5,800,2,5,C,1.2,Filters,13
+P006,Gearbox Seal Kit,Spare,8,3,1200,7,1,B,0.5,Seals,6
+P007,Drill Bit 150mm,Consumable,10,4,3500,14,5,A,12.0,Drilling,4
+P008,Coolant (L),Consumable,40,15,150,2,20,C,1.0,Fluids,59
