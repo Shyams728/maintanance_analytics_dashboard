@@ -112,11 +112,35 @@ CUSTOM_CSS = """
     
     /* Sidebar styling */
     [data-testid="stSidebar"] {
-        background: linear-gradient(180deg, #2c3e50 0%, #1a252f 100%);
+        background: linear-gradient(180deg, #0f172a 0%, #1e293b 100%);
+        border-right: 1px solid rgba(255,255,255,0.1);
     }
     
-    [data-testid="stSidebar"] [data-testid="stMarkdown"] {
-        color: #ecf0f1;
+    /* Force all text in sidebar to be white */
+    [data-testid="stSidebar"] * {
+        color: #ffffff !important;
+    }
+    
+    /* Fix for Selectbox/Multiselect backgrounds */
+    [data-testid="stSidebar"] [data-baseweb="select"] > div {
+        background-color: rgba(0, 0, 0, 0.3) !important;
+        border-color: rgba(255, 255, 255, 0.2) !important;
+        color: white !important;
+    }
+    
+    /* Fix for dropdown options text color (when opened) - hacky but needed */
+    ul[data-testid="stSelectboxVirtualDropdown"] li {
+        color: #2c3e50 !important; /* revert to dark for white dropdowns */
+    }
+    
+    /* Fix for MultiSelect tags */
+    [data-testid="stSidebar"] [data-baseweb="tag"] {
+        background-color: rgba(255, 255, 255, 0.2) !important;
+    }
+    
+    /* Standard Inputs */
+    [data-testid="stSidebar"] input {
+        color: white !important;
     }
     
     /* Success/Warning/Error containers */
