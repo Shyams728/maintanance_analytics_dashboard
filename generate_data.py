@@ -226,36 +226,92 @@ df_budget = pd.DataFrame(budget_data)
 df_budget.to_csv(f"{OUTPUT_DIR}/Fact_Budget_vs_Actual.csv", index=False)
 print("Generated Fact_Budget_vs_Actual.csv")
 
-# 8. Fact_Sensor_Readings (NEW)
-# Simulating hourly readings for key equipment
-sensor_readings = []
-sensor_start = END_DATE - timedelta(days=90) # Last 90 days only to keep size manageable
+# 8. Fact_Sensor_Readings (Correlated Run-to-Failure Data)
+# Simulating hourly readings.
+# Logic:
+# - Normal Operation: Baseline values + noise
+# - Pre-Failure (14 days before Breakdown): Exponential degradation trend
+# - Post-Failure: Reset to baseline
 
-print("Generating Sensor Data...")
+print("Generating Correlated Sensor Data...")
+sensor_readings = []
 eq_list = [e for e in equipment if e["Criticality"] == "High"]
-current_ts = sensor_start
+high_crit_ids = set(e["EquipmentID"] for e in eq_list)
+
+# Convert Work Orders to a lookup dict for faster processing
+# Dict structure: EquipmentID -> list of (FailureDate, Type)
+wo_lookup = {eid: [] for eid in high_crit_ids}
+for wo in work_orders:
+    if wo["EquipmentID"] in high_crit_ids and wo["MaintenanceType"] == "Breakdown":
+        fail_date = datetime.strptime(wo["Date"], "%Y-%m-%d")
+        wo_lookup[wo["EquipmentID"]].append(fail_date)
+
+# Sort failure dates
+for eid in wo_lookup:
+    wo_lookup[eid].sort()
+
+current_ts = START_DATE # Generate for full period
+FREQ_HOURS = 4
 
 while current_ts <= END_DATE:
     for eq in eq_list:
-        # Base healthy values
-        temp = 75 + random.uniform(-5, 5) # C
-        vibration = 2.5 + random.uniform(-0.5, 0.5) # mm/s
+        eid = eq["EquipmentID"]
         
-        # Inject anomalies occasionally
-        if random.random() < 0.05:
-            temp += random.uniform(10, 30)
-        if random.random() < 0.05:
-            vibration += random.uniform(2, 5)
+        # Base healthy values
+        base_temp = 75 
+        base_vib = 2.5
+        
+        # Check if we are approaching a failure
+        days_to_failure = 999
+        upcoming_failure = None
+        
+        for f_date in wo_lookup[eid]:
+            if f_date > current_ts:
+                delta = (f_date - current_ts).total_seconds() / 86400 # days
+                if delta < 20: # Start looking 20 days out
+                    days_to_failure = delta
+                    upcoming_failure = f_date
+                    break
+        
+        # Degradation Logic
+        if days_to_failure < 14: # Degradation starts 14 days before
+            # Exponential degradation factor (0 to 1 scale roughly)
+            factor = np.exp((14 - days_to_failure) / 4) - 1
+            # Cap factor to avoid absurd values
+            factor = min(factor, 50) 
+            
+            # Add degradation to base
+            temp_reading = base_temp + (factor * 2.5) + random.uniform(-2, 2)
+            vib_reading = base_vib + (factor * 0.5) + random.uniform(-0.2, 0.2)
+            is_failure_imminent = True
+        else:
+            # Healthy State
+            temp_reading = base_temp + random.uniform(-5, 5)
+            vib_reading = base_vib + random.uniform(-0.5, 0.5)
+            is_failure_imminent = False
+            
+        # occasional anomalies unrelated to failure (False Positives)
+        if not is_failure_imminent and random.random() < 0.005:
+             temp_reading += random.uniform(10, 20)
+             
+        # Normalize/Clip
+        temp_reading = max(0, round(temp_reading, 1))
+        vib_reading = max(0, round(vib_reading, 2))
             
         sensor_readings.append({
             "Timestamp": current_ts.strftime("%Y-%m-%d %H:%M:%S"),
-            "EquipmentID": eq["EquipmentID"],
-            "Temperature_C": round(temp, 1),
-            "Vibration_mm_s": round(vibration, 2),
-            "Status": "Alert" if temp > 100 or vibration > 6 else "Normal"
+            "EquipmentID": eid,
+            "Temperature_C": temp_reading,
+            "Vibration_mm_s": vib_reading,
+            "Status": "Alert" if (temp_reading > 95 or vib_reading > 5) else "Normal",
+            # Useful for training (Target Label), but ideally we calculate this in prep
+            "_RUL_Days": round(days_to_failure, 2) if days_to_failure < 999 else 999 
         })
-    current_ts += timedelta(hours=4) # Every 4 hours
+        
+    current_ts += timedelta(hours=FREQ_HOURS)
 
 df_sensor = pd.DataFrame(sensor_readings)
+# Drop the helper column if you want strictly raw data, but keeping it helps quick validation
+# df_sensor.drop(columns=["_RUL_Days"], inplace=True)
 df_sensor.to_csv(f"{OUTPUT_DIR}/Fact_Sensor_Readings.csv", index=False)
-print("Generated Fact_Sensor_Readings.csv")
+print(f"Generated Fact_Sensor_Readings.csv with {len(df_sensor)} rows")

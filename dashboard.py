@@ -1,13 +1,18 @@
-
 import streamlit as st
 import pandas as pd
 import os
 import sys
+import time
 
-# Add current directory to path for imports
+# Add current directory to path
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from styles import inject_custom_css, COLORS, format_currency
+try:
+    from analytics_engine import predict_rul_batch
+except ImportError:
+    # Fallback if analytics_engine is not yet ready or path issue
+    def predict_rul_batch(df): return [999] * len(df)
 
 st.set_page_config(
     page_title="Maintenance Analytics Dashboard",
@@ -18,139 +23,184 @@ st.set_page_config(
 inject_custom_css()
 
 # =============================================================================
-# HEADER
+# DATA LOADING
 # =============================================================================
-
-st.title("🏭 Maintenance Analytics Dashboard")
-st.markdown("### Cost, Inventory & Maintenance Management System")
-
-st.markdown("---")
-
-# =============================================================================
-# QUICK STATS
-# =============================================================================
-
 DATA_DIR = "d:/data_science/power_bi/data"
 
 @st.cache_data
-def load_quick_stats():
+def load_data():
     try:
-        df_wo = pd.read_csv(os.path.join(DATA_DIR, "Fact_Maintenance_WorkOrders_Enriched.csv"))
-        df_prod = pd.read_csv(os.path.join(DATA_DIR, "Dim_Product_Enriched.csv"))
-        df_equip = pd.read_csv(os.path.join(DATA_DIR, "Dim_Equipment.csv"))
-        df_budget = pd.read_csv(os.path.join(DATA_DIR, "Fact_Budget_vs_Actual.csv"))
-        
+        # Load necessary files
         return {
-            'work_orders': len(df_wo),
-            'total_cost': df_wo['TotalCost'].sum(),
-            'products': len(df_prod),
-            'equipment': len(df_equip),
-            'critical_stock': len(df_prod[df_prod['Stock Status'] == 'Critical']),
-            'breakdown_count': len(df_wo[df_wo['MaintenanceType'] == 'Breakdown']),
-            'budget_total': df_budget['BudgetAmount'].sum()
+            'wo': pd.read_csv(os.path.join(DATA_DIR, "Fact_Maintenance_WorkOrders_Enriched.csv")),
+            'sensor': pd.read_csv(os.path.join(DATA_DIR, "Fact_Sensor_Readings.csv")),
+            'equip': pd.read_csv(os.path.join(DATA_DIR, "Dim_Equipment.csv")),
+            'budget': pd.read_csv(os.path.join(DATA_DIR, "Fact_Budget_vs_Actual.csv")),
         }
-    except:
+    except FileNotFoundError:
+        st.error("Data files not found. Please run generate_data.py first.")
         return None
 
-stats = load_quick_stats()
-
-if stats:
-    col1, col2, col3, col4 = st.columns(4)
-    
-    with col1:
-        st.metric("📋 Work Orders", stats['work_orders'])
-        
-    with col2:
-        st.metric("💰 Maintenance Cost", format_currency(stats['total_cost']))
-        
-    with col3:
-        st.metric("⚙️ Equipment Units", stats['equipment'])
-        
-    with col4:
-        st.metric("📦 Products", stats['products'])
-
-st.markdown("---")
+data = load_data()
 
 # =============================================================================
-# NAVIGATION
+# SIDEBAR - PERSONA SELECTION
 # =============================================================================
-
-st.markdown("""
-### 📍 Navigation Guide
-
-Use the sidebar to navigate to the different analytics modules:
-
-| Page | Description | Key Features |
-|------|-------------|--------------|
-| 📊 **Executive Command Center** | High-level KPIs for plant managers | MTTR/MTBF, Availability %, Budget Variance |
-| 🛠️ **Maintenance Operations** | Reliability analytics & work order management | Pareto Analysis, MTTR/MTBF Quadrant, Failure Trends |
-| 📦 **Inventory & Supply Chain** | Stock monitoring & procurement intelligence | Turnover Ratio, Coverage Days, Reorder Alerts |
-| 👷 **Technician Performance** | Workforce productivity analysis | Repair Time, Work Order Volume |
-| 💰 **Cost & Vendor Analysis** | Financial tracking & vendor management | Payment Variance, Budget Adherence |
-
----
-
-### 🎯 Key Performance Indicators
-
-This dashboard tracks the following **industry-standard KPIs**:
-
-**Maintenance Reliability**
-- **MTTR** (Mean Time To Repair) - Average repair duration
-- **MTBF** (Mean Time Between Failures) - Equipment reliability indicator
-- **Equipment Availability %** - Uptime percentage
-
-**Inventory Management**
-- **Inventory Turnover Ratio** - Stock efficiency metric
-- **Stock Coverage Days** - Days of supply remaining
-- **Reorder Point Alerts** - Critical stock notifications
-
-**Cost Control**
-- **Payment Variance** - Contract vs actual payments
-- **Budget Adherence %** - Actual vs planned spending
-- **Maintenance Cost Distribution** - Preventive vs breakdown costs
-
----
-
-### 👤 Profile Alignment
-
-This analytics system is designed for professionals in:
-
-✔ **Mining & Limestone Operations**  
-✔ **Mechanical Maintenance Engineering**  
-✔ **Heavy Equipment (HEMM) Management**  
-✔ **Reliability & Preventive Maintenance**  
-✔ **Plant Operations & SAP Integration**
-
----
-
-*Built with Streamlit & Plotly | Data Analytics for Cement/Mining Operations*
-""")
-
-# =============================================================================
-# SIDEBAR
-# =============================================================================
-
-st.sidebar.success("👈 Select a page from the navigation above.")
+st.sidebar.title("👤 User Persona")
+persona = st.sidebar.radio(
+    "Select View Mode:",
+    ("Operator (Shop Floor)", "Maintenance Manager", "Plant Executive"),
+    index=1
+)
 
 st.sidebar.markdown("---")
-st.sidebar.markdown("### 📊 Dashboard Info")
-st.sidebar.markdown("""
-**Data Coverage**: 2024-2025  
-**Last Updated**: Live Data  
-**Domain**: Cement/Mining/HEMM
-""")
+if persona == "Operator (Shop Floor)":
+    st.sidebar.info("Focus: Real-time Asset Health, Alerts, Sensor Readings.")
+elif persona == "Maintenance Manager":
+    st.sidebar.info("Focus: Work Orders, Schedule Compliance, technician allocation.")
+else:
+    st.sidebar.info("Focus: ROI, OEE, Budget Adherence, High-level Reliability.")
 
-if stats:
-    st.sidebar.markdown("---")
-    st.sidebar.markdown("### ⚠️ Quick Alerts")
+st.sidebar.markdown("---")
+st.sidebar.markdown("### 🧭 Navigation")
+st.sidebar.page_link("dashboard.py", label="🏠 Home", icon="🏠")
+st.sidebar.page_link("pages/1_Executive_Command_Center.py", label="📊 Executive Details", icon="📊")
+st.sidebar.page_link("pages/2_Maintenance_Operations.py", label="🛠️ Maintenance Ops", icon="🛠️")
+
+# =============================================================================
+# VIEW LOGIC
+# =============================================================================
+
+if data:
+    df_wo = data['wo']
+    df_sensor = data['sensor']
+    df_equip = data['equip']
     
-    if stats['critical_stock'] > 0:
-        st.sidebar.warning(f"🔴 {stats['critical_stock']} items at critical stock")
-    else:
-        st.sidebar.success("✅ All inventory healthy")
-    
-    breakdown_pct = (stats['breakdown_count'] / stats['work_orders']) * 100 if stats['work_orders'] > 0 else 0
-    if breakdown_pct > 40:
-        st.sidebar.warning(f"🔴 High breakdown rate: {breakdown_pct:.1f}%")
-    else:
-        st.sidebar.success(f"✅ Breakdown rate: {breakdown_pct:.1f}%")
+    # -------------------------------------------------------------------------
+    # OPERATOR VIEW
+    # -------------------------------------------------------------------------
+    if persona == "Operator (Shop Floor)":
+        st.title("👷 Operator Dashboard")
+        st.markdown("### Real-Time Asset Health Monitoring")
+        
+        # Simulate "Live" data by taking the last known reading for each equipment
+        # In a real app, this would query an API or DB
+        latest_readings = df_sensor.sort_values('Timestamp').groupby('EquipmentID').tail(1).copy()
+        
+        # PREDICT RUL
+        # We need to make sure we map these correctly
+        rul_preds = predict_rul_batch(latest_readings) 
+        latest_readings['Predicted_RUL'] = rul_preds
+        
+        # Display Grid
+        cols = st.columns(3)
+        
+        for idx, (i, row) in enumerate(latest_readings.iterrows()):
+            equip_name = df_equip[df_equip['EquipmentID'] == row['EquipmentID']]['EquipmentName'].values[0]
+            
+            with cols[idx % 3]:
+                # Determine Status Color
+                rul = row['Predicted_RUL']
+                if rul < 7:
+                    status_color = "red"
+                    icon = "🚨"
+                    msg = "CRITICAL FAILURE IMMINENT"
+                elif rul < 30:
+                    status_color = "orange"
+                    icon = "⚠️"
+                    msg = "Maintenance Required Soon"
+                else:
+                    status_color = "green"
+                    icon = "✅"
+                    msg = "Healthy Operation"
+                
+                st.markdown(f"""
+                <div style="border: 1px solid #444; padding: 15px; border-radius: 10px; border-left: 10px solid {status_color}; background-color: #262730;">
+                    <h4 style="margin:0;">{icon} {equip_name}</h4>
+                    <p style="font-size: 0.9em; opacity: 0.8; margin-bottom: 10px;">ID: {row['EquipmentID']}</p>
+                    <div style="display: flex; justify-content: space-between; margin-bottom: 5px;">
+                        <span>🌡️ Temp: <b>{row['Temperature_C']}°C</b></span>
+                        <span>〰️ Vibration: <b>{row['Vibration_mm_s']}</b></span>
+                    </div>
+                    <hr style="margin: 5px 0;">
+                    <div style="text-align: center;">
+                        <span style="font-size: 0.8em;">ESTIMATED REMAINING LIFE</span><br>
+                        <strong style="font-size: 1.5em; color: {status_color};">{rul:.1f} Days</strong>
+                    </div>
+                     <div style="text-align: center; margin-top:5px; font-size: 0.8em; font-weight: bold; color: {status_color};">
+                        {msg}
+                    </div>
+                </div>
+                """, unsafe_allow_html=True)
+                st.markdown("") # Spacer
+
+    # -------------------------------------------------------------------------
+    # MANAGER VIEW
+    # -------------------------------------------------------------------------
+    elif persona == "Maintenance Manager":
+        st.title("🛠️ Maintenance Management")
+        
+        # Quick Stats Row
+        c1, c2, c3, c4 = st.columns(4)
+        total_open = len(df_wo[df_wo['DowntimeHours'].isna()]) # Proxy for open if Downtime not logged? Or just simulate
+        # Actually our enriched data is historical, so let's simulate "Open" as "Recent Breakdown"
+        recent_breakdowns = len(df_wo[df_wo['MaintenanceType'] == 'Breakdown'])
+        
+        c1.metric("Total Work Orders", len(df_wo))
+        c2.metric("Breakdown Events", recent_breakdowns, delta_color="inverse")
+        c3.metric("Avg Repair Cost", format_currency(df_wo['TotalCost'].mean()))
+        c4.metric("Avg Downtime (Hrs)", f"{df_wo['DowntimeHours'].mean():.1f}")
+        
+        st.markdown("### 📋 Active Work Order Queue (Simulated)")
+        # Show 'recent' work orders
+        st.dataframe(
+            df_wo.tail(10)[['WorkOrderID', 'EquipmentID', 'MaintenanceType', 'Date', 'FailureCode', 'TotalCost']],
+            use_container_width=True,
+            hide_index=True
+        )
+        
+        col_1, col_2 = st.columns(2)
+        with col_1:
+             st.markdown("### 📉 Failure Causes (Pareto)")
+             # Simple Pareto
+             pareto = df_wo[df_wo['MaintenanceType'] == 'Breakdown']['FailureCode'].value_counts()
+             st.bar_chart(pareto)
+             
+        with col_2:
+            st.markdown("### 📅 Upcoming Scheduled Maintenance")
+            # In a real app this would query future dates. 
+            # We'll just list some high-use equipment
+            st.info("Next Maintenance Cycle: **Monday, 14th Feb 2025**")
+            st.text("- Conveyor Belt CV001 (Preventive)\n- Crusher Unit CR001 (Inspection)\n- Excavator EX001 (Oil Change)")
+
+    # -------------------------------------------------------------------------
+    # EXECUTIVE VIEW
+    # -------------------------------------------------------------------------
+    else: # Executive
+        st.title("📊 Executive Command Center")
+        
+        # Financial Highlights
+        total_spend = df_wo['TotalCost'].sum()
+        budget = data['budget']['BudgetAmount'].sum()
+        variance = budget - total_spend
+        
+        kpi1, kpi2, kpi3 = st.columns(3)
+        kpi1.metric("YTD Maintenance Spend", format_currency(total_spend), delta=format_currency(variance))
+        kpi2.metric("Total Budget", format_currency(budget))
+        kpi3.metric("Budget Utilization", f"{(total_spend/budget)*100:.1f}%", delta_color="inverse") # Inverse because higher is worse
+        
+        st.markdown("### 🏭 Plant Health Overview")
+        
+        # Simple OEE Proxy (Availability)
+        total_hours = 365 * 24
+        total_downtime = df_wo['DowntimeHours'].sum()
+        availability = ((total_hours - total_downtime) / total_hours) * 100
+        
+        st.progress(availability / 100, text=f"Overall Plant Availability: **{availability:.2f}%**")
+        
+        st.markdown("### 💰 Cost Drivers")
+        cost_by_equip = df_wo.groupby('EquipmentID')['TotalCost'].sum().sort_values(ascending=False).head(5)
+        st.bar_chart(cost_by_equip)
+
+else:
+    st.info("Loading data...")
