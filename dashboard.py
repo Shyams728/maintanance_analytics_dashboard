@@ -25,7 +25,7 @@ inject_custom_css()
 # =============================================================================
 # DATA LOADING
 # =============================================================================
-DATA_DIR = "d:/data_science/power_bi/data"
+DATA_DIR = "../data"
 
 @st.cache_data
 def load_data():
