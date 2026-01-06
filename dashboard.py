@@ -25,21 +25,40 @@ inject_custom_css()
 # =============================================================================
 # DATA LOADING
 # =============================================================================
-DATA_DIR = "../data"
+# Handle relative paths for portability
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+DATA_DIR = os.path.join(BASE_DIR, "data")
 
 @st.cache_data
 def load_data():
-    try:
-        # Load necessary files
-        return {
-            'wo': pd.read_csv(os.path.join(DATA_DIR, "Fact_Maintenance_WorkOrders_Enriched.csv")),
-            'sensor': pd.read_csv(os.path.join(DATA_DIR, "Fact_Sensor_Readings.csv")),
-            'equip': pd.read_csv(os.path.join(DATA_DIR, "Dim_Equipment.csv")),
-            'budget': pd.read_csv(os.path.join(DATA_DIR, "Fact_Budget_vs_Actual.csv")),
-        }
-    except FileNotFoundError:
-        st.error("Data files not found. Please run generate_data.py first.")
+    files_to_load = {
+        'wo': "Fact_Maintenance_WorkOrders_Enriched.csv",
+        'sensor': "Fact_Sensor_Readings.csv",
+        'equip': "Dim_Equipment.csv",
+        'budget': "Fact_Budget_vs_Actual.csv",
+    }
+    
+    loaded_data = {}
+    missing_files = []
+    
+    for key, filename in files_to_load.items():
+        file_path = os.path.join(DATA_DIR, filename)
+        if not os.path.exists(file_path):
+            missing_files.append(filename)
+            continue
+            
+        try:
+            loaded_data[key] = pd.read_csv(file_path)
+        except Exception as e:
+            st.error(f"Error loading {filename}: {str(e)}")
+            return None
+
+    if missing_files:
+        st.error(f"Missing data files: {', '.join(missing_files)}")
+        st.info("Please run `generate_data.py` and then `preprocess_data.py` to generate the required files.")
         return None
+        
+    return loaded_data
 
 data = load_data()
 

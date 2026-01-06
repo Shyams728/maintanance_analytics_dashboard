@@ -7,8 +7,9 @@ import joblib
 import os
 
 # Configuration
-DATA_DIR = "d:/data_science/power_bi/data"
-MODEL_PATH = "d:/data_science/power_bi/rul_model.joblib"
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+DATA_DIR = os.path.join(BASE_DIR, "data")
+MODEL_PATH = os.path.join(BASE_DIR, "rul_model.joblib")
 
 def load_data():
     """Loads sensor data and filters for valid RUL training samples."""

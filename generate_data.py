@@ -5,7 +5,8 @@ from datetime import datetime, timedelta
 import numpy as np
 
 # Configuration
-OUTPUT_DIR = "d:/data_science/power_bi/data"
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+OUTPUT_DIR = os.path.join(BASE_DIR, "data")
 START_DATE = datetime(2024, 1, 1)
 END_DATE = datetime(2025, 12, 31)
 NUM_DAYS = (END_DATE - START_DATE).days + 1

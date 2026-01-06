@@ -3,7 +3,8 @@ import pandas as pd
 import os
 from datetime import datetime, timedelta
 
-DATA_DIR = "d:/data_science/power_bi/data"
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+DATA_DIR = os.path.join(BASE_DIR, "data")
 
 def create_dim_date(start_date, end_date):
     """Creates a Date Dimension table."""
