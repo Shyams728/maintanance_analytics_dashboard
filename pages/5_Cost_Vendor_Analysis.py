@@ -30,7 +30,9 @@ inject_custom_css()
 st.title("💰 Cost & Vendor Analysis")
 st.markdown("**Vendor performance, payment variance, and budget adherence tracking**")
 
-DATA_DIR = "d:/data_science/power_bi/data"
+# Handle relative paths for portability
+BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+DATA_DIR = os.path.join(BASE_DIR, "data")
 
 
 @st.cache_data

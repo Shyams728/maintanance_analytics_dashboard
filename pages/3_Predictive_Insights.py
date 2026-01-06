@@ -16,7 +16,9 @@ inject_custom_css()
 
 st.title("🔮 Predictive Analytics & RUL Insights")
 
-DATA_DIR = "d:/data_science/power_bi/data"
+# Handle relative paths for portability
+BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+DATA_DIR = os.path.join(BASE_DIR, "data")
 
 @st.cache_data
 def load_sensor_data():
