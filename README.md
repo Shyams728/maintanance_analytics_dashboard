@@ -4,7 +4,7 @@
 
 A comprehensive **Cost, Inventory, and Maintenance Management System** built with Python and Streamlit. This dashboard provides real-time insights for the Cement, Mining, and Heavy Machinery industries, focusing on equipment reliability, supply chain efficiency, and cost control.
 
-🚀 **Live App**: [https://shyamsmaintananceanalyticsdashboard.streamlit.app/](https://shyamsmaintananceanalyticsdashboard.streamlit.app/)
+[![Live Demo](https://img.shields.io/badge/Live-Demo-brightgreen?style=for-the-badge&logo=streamlit)](https://shyamsmaintananceanalyticsdashboard.streamlit.app/)
 
 ![Dashboard Overview](https://raw.githubusercontent.com/Shyams728/maintanance_analytics_dashboard/main/execomcen.png)
 
