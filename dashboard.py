@@ -208,14 +208,20 @@ if data:
         kpi2.metric("Total Budget", format_currency(budget))
         kpi3.metric("Budget Utilization", f"{(total_spend/budget)*100:.1f}%", delta_color="inverse") # Inverse because higher is worse
         
-        st.markdown("### 🏭 Plant Health Overview")
-        
         # Simple OEE Proxy (Availability)
-        total_hours = 365 * 24
-        total_downtime = df_wo['DowntimeHours'].sum()
-        availability = ((total_hours - total_downtime) / total_hours) * 100
+        # Calculate timeframe
+        date_min = df_wo['Date'].min()
+        date_max = df_wo['Date'].max()
+        if isinstance(date_min, str):
+            date_min = pd.to_datetime(date_min)
+            date_max = pd.to_datetime(date_max)
+        days = (date_max - date_min).days + 1
         
-        st.progress(availability / 100, text=f"Overall Plant Availability: **{availability:.2f}%**")
+        total_available_hours = 6 * days * 24 # Assuming 6 machines
+        total_downtime = df_wo['DowntimeHours'].sum()
+        availability = ((total_available_hours - total_downtime) / total_available_hours) * 100
+        
+        st.progress(max(0, availability / 100), text=f"Overall Plant Availability: **{availability:.2f}%** ({days} days analysis)")
         
         st.markdown("### 💰 Cost Drivers")
         cost_by_equip = df_wo.groupby('EquipmentID')['TotalCost'].sum().sort_values(ascending=False).head(5)

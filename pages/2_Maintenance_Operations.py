@@ -87,7 +87,11 @@ date_range = st.sidebar.date_input(
     value=(min_date.date(), max_date.date())
 )
 if len(date_range) == 2:
-    df = df[(df['Date'].dt.date >= date_range[0]) & (df['Date'].dt.date <= date_range[1])]
+    start_date, end_date = date_range
+    df = df[(df['Date'].dt.date >= start_date) & (df['Date'].dt.date <= end_date)]
+    num_days = (end_date - start_date).days + 1
+else:
+    num_days = (df['Date'].max() - df['Date'].min()).days + 1
 
 # =============================================================================
 # KPI SUMMARY
@@ -116,8 +120,11 @@ with col3:
     st.metric("Avg MTTR", f"{avg_mttr:.1f} hrs")
 
 with col4:
-    total_downtime = df['DowntimeHours'].sum()
-    st.metric("Total Downtime", f"{total_downtime:,.0f} hrs")
+    total_unplanned = breakdown_df['DowntimeHours'].sum()
+    total_planned = preventive_df['DowntimeHours'].sum()
+    st.metric("Unplanned Downtime", f"{total_unplanned:,.0f} hrs", 
+              delta=f"{total_planned:,.0f} hrs Planned",
+              delta_color="normal")
 
 with col5:
     total_cost = df['TotalCost'].sum()
@@ -245,7 +252,9 @@ with col_right:
     
     # Calculate MTTR and MTBF per equipment
     mttr_data = calculate_mttr(df)
-    mtbf_data = calculate_mtbf(df)
+    
+    # Use dynamic days for MTBF
+    mtbf_data = calculate_mtbf(df, days=num_days)
     
     if not mttr_data.empty and not mtbf_data.empty:
         # Merge data

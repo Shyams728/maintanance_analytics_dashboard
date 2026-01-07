@@ -40,61 +40,72 @@ def calculate_mttr(df_wo: pd.DataFrame, group_by: str = 'EquipmentID') -> pd.Dat
 
 
 def calculate_mtbf(df_wo: pd.DataFrame, group_by: str = 'EquipmentID', 
-                   total_operating_hours: float = 8760) -> pd.DataFrame:
+                   days: float = 365) -> pd.DataFrame:
     """
     Calculate Mean Time Between Failures (MTBF) per equipment.
-    MTBF = (Total Operating Hours - Total Downtime) / Number of Failures
+    MTBF = (Total Operating Hours - Total Unplanned Downtime) / Number of Failures
     
     Args:
         df_wo: Work orders dataframe
         group_by: Column to group by
-        total_operating_hours: Annual operating hours (default 8760 = 24x365)
+        days: Number of days in the period
     
     Returns:
         DataFrame with MTBF per group
     """
+    total_operating_hours = days * 24
     breakdown_wo = df_wo[df_wo['MaintenanceType'] == 'Breakdown'].copy()
     
     if breakdown_wo.empty:
-        return pd.DataFrame({group_by: [], 'MTBF_Hours': []})
+        # If no breakdowns, MTBF is the full operating time (or infinite, but we'll cap it at total hours)
+        # We need all equipment IDs that were in the original filtered set if possible
+        return pd.DataFrame({group_by: [], 'MTBF_Hours': [], 'Failure_Count': []})
     
     stats = breakdown_wo.groupby(group_by).agg(
         Failure_Count=('WorkOrderID', 'count'),
-        Total_Downtime=('DowntimeHours', 'sum')
+        Total_Unplanned_Downtime=('DowntimeHours', 'sum')
     ).reset_index()
     
-    # MTBF = (Operating Time - Downtime) / Failures
-    stats['MTBF_Hours'] = (total_operating_hours - stats['Total_Downtime']) / stats['Failure_Count']
-    stats['MTBF_Hours'] = stats['MTBF_Hours'].clip(lower=0)  # Ensure non-negative
+    # MTBF = (Operating Time - Unplanned Downtime) / Failures
+    stats['MTBF_Hours'] = (total_operating_hours - stats['Total_Unplanned_Downtime']) / stats['Failure_Count']
+    stats['MTBF_Hours'] = stats['MTBF_Hours'].clip(lower=0) 
     
     return stats[[group_by, 'MTBF_Hours', 'Failure_Count']]
 
 
 def calculate_equipment_availability(df_wo: pd.DataFrame, 
-                                     equipment_count: int = 6,
-                                     hours_per_year: float = 8760) -> dict:
+                                     equipment_count: int = 1,
+                                     days: float = 365) -> dict:
     """
     Calculate overall equipment availability percentage.
     Availability = (Total Available Hours - Total Downtime) / Total Available Hours × 100
     
     Args:
         df_wo: Work orders dataframe
-        equipment_count: Number of equipment pieces
-        hours_per_year: Operating hours per year per equipment
+        equipment_count: Number of equipment pieces in the filtered set
+        days: Number of days in the period
     
     Returns:
         Dictionary with availability metrics
     """
-    total_available_hours = equipment_count * hours_per_year
+    total_available_hours = equipment_count * days * 24
     total_downtime = df_wo['DowntimeHours'].sum()
     
+    if total_available_hours == 0:
+        return {
+            'Availability_Pct': 100.0,
+            'Total_Downtime_Hours': 0.0,
+            'Total_Available_Hours': 0.0,
+            'Uptime_Hours': 0.0
+        }
+
     availability_pct = ((total_available_hours - total_downtime) / total_available_hours) * 100
     
     return {
-        'Availability_Pct': round(availability_pct, 2),
+        'Availability_Pct': round(max(0, availability_pct), 2),
         'Total_Downtime_Hours': round(total_downtime, 2),
-        'Total_Available_Hours': total_available_hours,
-        'Uptime_Hours': round(total_available_hours - total_downtime, 2)
+        'Total_Available_Hours': round(total_available_hours, 2),
+        'Uptime_Hours': round(max(0, total_available_hours - total_downtime), 2)
     }
 
 
@@ -158,7 +169,9 @@ def calculate_maintenance_mix(df_wo: pd.DataFrame) -> dict:
         'Preventive_Pct': round((preventive / total) * 100, 1) if total > 0 else 0,
         'Breakdown_Pct': round((breakdown / total) * 100, 1) if total > 0 else 0,
         'Preventive_Cost': df_wo[df_wo['MaintenanceType'] == 'Preventive']['TotalCost'].sum(),
-        'Breakdown_Cost': df_wo[df_wo['MaintenanceType'] == 'Breakdown']['TotalCost'].sum()
+        'Breakdown_Cost': df_wo[df_wo['MaintenanceType'] == 'Breakdown']['TotalCost'].sum(),
+        'Preventive_Downtime': df_wo[df_wo['MaintenanceType'] == 'Preventive']['DowntimeHours'].sum(),
+        'Breakdown_Downtime': df_wo[df_wo['MaintenanceType'] == 'Breakdown']['DowntimeHours'].sum()
     }
 
 
@@ -357,14 +370,37 @@ def calculate_all_kpis(df_wo: pd.DataFrame, df_trans: pd.DataFrame,
 
 
 def get_executive_summary(df_wo: pd.DataFrame, df_trans: pd.DataFrame,
-                          df_products: pd.DataFrame) -> dict:
+                          df_products: pd.DataFrame, equipment_ids: list = None) -> dict:
     """
     Get high-level executive summary KPIs.
     
+    Args:
+        df_wo: Filtered work orders
+        df_trans: Filtered transactions
+        df_products: Products dimension
+        equipment_ids: List of unique equipment IDs that should be considered for the timeframe
+        
     Returns:
         Dictionary with key executive metrics
     """
-    availability = calculate_equipment_availability(df_wo)
+    # Calculate timeframe days
+    if not df_wo.empty:
+        date_min = df_wo['Date'].min()
+        date_max = df_wo['Date'].max()
+        if isinstance(date_min, str):
+            date_min = pd.to_datetime(date_min)
+            date_max = pd.to_datetime(date_max)
+        days = (date_max - date_min).days + 1
+    else:
+        days = 365 # Default fallback
+        
+    # Equipment count for availability
+    if equipment_ids:
+        eq_count = len(equipment_ids)
+    else:
+        eq_count = df_wo['EquipmentID'].nunique() if not df_wo.empty else 1
+    
+    availability = calculate_equipment_availability(df_wo, eq_count, days)
     maintenance_mix = calculate_maintenance_mix(df_wo)
     
     # Overall MTTR and MTBF
@@ -372,22 +408,31 @@ def get_executive_summary(df_wo: pd.DataFrame, df_trans: pd.DataFrame,
     overall_mttr = breakdown_wo['DowntimeHours'].mean() if not breakdown_wo.empty else 0
     
     failure_count = len(breakdown_wo)
-    total_downtime = breakdown_wo['DowntimeHours'].sum()
-    overall_mtbf = (8760 * 6 - total_downtime) / failure_count if failure_count > 0 else 0
+    total_unplanned_downtime = breakdown_wo['DowntimeHours'].sum()
+    
+    # MTBF = (Total Equipment * Period Hours - Unplanned Downtime) / Failures
+    total_period_hours = eq_count * days * 24
+    overall_mtbf = (total_period_hours - total_unplanned_downtime) / failure_count if failure_count > 0 else total_period_hours
     
     # Stock health
-    critical_stock = len(df_products[df_products['CurrentStock'] <= df_products['ReorderPoint']])
+    critical_stock = 0
+    if df_products is not None:
+        critical_stock = len(df_products[df_products['CurrentStock'] <= df_products['ReorderPoint']])
     
     return {
         'Total_Maintenance_Cost': df_wo['TotalCost'].sum(),
         'Preventive_Cost': maintenance_mix['Preventive_Cost'],
         'Breakdown_Cost': maintenance_mix['Breakdown_Cost'],
         'Availability_Pct': availability['Availability_Pct'],
+        'Total_Downtime': availability['Total_Downtime_Hours'],
+        'Unplanned_Downtime': maintenance_mix['Breakdown_Downtime'],
+        'Planned_Downtime': maintenance_mix['Preventive_Downtime'],
         'MTTR_Hours': round(overall_mttr, 2),
         'MTBF_Hours': round(overall_mtbf, 2),
         'Total_Work_Orders': len(df_wo),
         'Breakdown_Count': maintenance_mix['Breakdown_Count'],
         'Preventive_Pct': maintenance_mix['Preventive_Pct'],
         'Critical_Stock_Items': critical_stock,
-        'Total_Products': len(df_products)
+        'Days_In_Period': days,
+        'Equipment_Count': eq_count
     }

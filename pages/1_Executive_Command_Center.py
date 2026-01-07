@@ -101,7 +101,13 @@ if selected_equipment != 'All':
 # CALCULATE KPIs
 # =============================================================================
 
-summary = get_executive_summary(df_wo_filtered, None, df_prod)
+# Get list of equipment IDs for the filtered set (used for availability baseline)
+if selected_equipment != 'All':
+    filtered_eq_ids = [equip_id]
+else:
+    filtered_eq_ids = list(df_equip['EquipmentID'].unique())
+
+summary = get_executive_summary(df_wo_filtered, None, df_prod, equipment_ids=filtered_eq_ids)
 availability = calculate_equipment_availability(df_wo_filtered, len(df_equip))
 maintenance_mix = calculate_maintenance_mix(df_wo_filtered)
 
@@ -147,9 +153,9 @@ with col4:
 
 with col5:
     st.metric(
-        label="Preventive Ratio",
-        value=f"{summary['Preventive_Pct']:.1f}%",
-        delta=f"{summary['Breakdown_Count']} breakdowns",
+        label="Downtime",
+        value=f"{summary['Total_Downtime']:.0f} hrs",
+        delta=f"{summary['Unplanned_Downtime']:.0f}h Unplanned",
         delta_color="inverse"
     )
 
