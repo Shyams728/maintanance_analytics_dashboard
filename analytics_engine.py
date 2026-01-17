@@ -81,3 +81,12 @@ def predict_rul_batch(df_input):
 
 if __name__ == "__main__":
     train_model()
+
+def train_rul_model(df_sensor: pd.DataFrame, df_wo: pd.DataFrame):
+    """
+    Train a Remaining Useful Life (RUL) model.
+    Placeholder for future implementation.
+    """
+
+    st.warning("RUL model training has not been implemented yet.")
+    return None

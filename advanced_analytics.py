@@ -149,3 +149,15 @@ def calculate_vendor_score(df_vendor: pd.DataFrame) -> pd.DataFrame:
     df['VendorTier'] = df['CompositeScore'].apply(get_tier)
     
     return df
+
+def get_failure_root_cause(df_wo: pd.DataFrame) -> pd.Series:
+    """
+    Analyze the root cause of failures.
+    """
+
+    breakdown_wo = df_wo[df_wo['MaintenanceType'] == 'Breakdown']
+
+    if breakdown_wo.empty:
+        return pd.Series(dtype=str)
+
+    return breakdown_wo['FailureCode'].value_counts()

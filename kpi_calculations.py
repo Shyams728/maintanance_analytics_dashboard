@@ -436,3 +436,65 @@ def get_executive_summary(df_wo: pd.DataFrame, df_trans: pd.DataFrame,
         'Days_In_Period': days,
         'Equipment_Count': eq_count
     }
+
+def calculate_oee(df_prod: pd.DataFrame) -> dict:
+    """
+    Calculate Overall Equipment Effectiveness (OEE) from production data.
+    OEE = Availability * Performance * Quality
+
+    Args:
+        df_prod: DataFrame with daily production data including:
+                 - OperatingHours
+                 - TotalPartsProduced
+                 - GoodPartsProduced
+                 - IdealCycleTime_s
+    """
+    if df_prod.empty:
+        return {
+            'OEE_Pct': 0,
+            'Availability_Component': 0,
+            'Performance_Component': 0,
+            'Quality_Component': 0
+        }
+
+    # Assuming 24 scheduled hours per day entry for each piece of equipment
+    total_scheduled_hours = len(df_prod) * 24
+    total_operating_hours = df_prod['OperatingHours'].sum()
+
+    # Availability
+    availability = total_operating_hours / total_scheduled_hours if total_scheduled_hours > 0 else 0
+
+    # Performance
+    total_parts = df_prod['TotalPartsProduced'].sum()
+    # Calculate potential parts based on average cycle time and actual operating hours
+    avg_ideal_cycle_time_s = df_prod['IdealCycleTime_s'].mean()
+    potential_parts = (total_operating_hours * 3600) / avg_ideal_cycle_time_s if avg_ideal_cycle_time_s > 0 else 0
+
+    performance = total_parts / potential_parts if potential_parts > 0 else 0
+    performance = min(performance, 1.0) # Cap at 100%
+
+    # Quality
+    good_parts = df_prod['GoodPartsProduced'].sum()
+    quality = good_parts / total_parts if total_parts > 0 else 0
+
+    oee = availability * performance * quality * 100
+
+    return {
+        'OEE_Pct': round(oee, 2),
+        'Availability_Component': round(availability * 100, 2),
+        'Performance_Component': round(performance * 100, 2),
+        'Quality_Component': round(quality * 100, 2)
+    }
+
+def calculate_planned_maintenance_percentage(df_wo: pd.DataFrame) -> float:
+    """
+    Calculate the percentage of maintenance work that is planned.
+    """
+
+    planned = df_wo[df_wo['MaintenanceType'] == 'Preventive']['WorkOrderID'].count()
+    total = df_wo['WorkOrderID'].count()
+
+    if total == 0:
+        return 100.0
+
+    return round((planned / total) * 100, 2)

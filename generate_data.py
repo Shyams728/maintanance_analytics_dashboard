@@ -181,6 +181,8 @@ while current_date <= END_DATE:
             "MaintenanceType": m_type,
             "FailureCode": failure_code,
             "DowntimeHours": round(downtime, 2),
+            "Planned Downtime": round(downtime, 2) if is_preventive else 0,
+            "Unplanned Downtime": round(downtime, 2) if not is_preventive else 0,
             "LaborHours": round(labor_hours, 2),
             "PartsCost": round(parts_cost, 2),
             "LaborCost": round(labor_cost, 2),
@@ -195,7 +197,61 @@ df_wo = pd.DataFrame(work_orders)
 df_wo.to_csv(f"{OUTPUT_DIR}/Fact_Maintenance_WorkOrders.csv", index=False)
 print("Generated Fact_Maintenance_WorkOrders.csv")
 
-# 7. Fact_Budget_vs_Actual (Replaces Fact_Costs)
+
+# 7. Fact_Production_Data (NEW - for OEE)
+print("Generating Daily Production Data...")
+production_data = []
+# Create a quick lookup for downtime: { (Date, EquipmentID): DowntimeHours }
+downtime_lookup = {}
+for wo in work_orders:
+    key = (wo["Date"], wo["EquipmentID"])
+    downtime_lookup[key] = downtime_lookup.get(key, 0) + wo["DowntimeHours"]
+
+current_date = START_DATE
+while current_date <= END_DATE:
+    date_str = current_date.strftime("%Y-%m-%d")
+    for eq in equipment:
+        eq_id = eq["EquipmentID"]
+
+        # Get downtime for the day
+        downtime_hours = downtime_lookup.get((date_str, eq_id), 0)
+
+        # OEE Calculation Parameters
+        ideal_cycle_time_s = random.randint(110, 130) # seconds per part
+        total_scheduled_hours = 24
+
+        # Availability
+        operating_hours = max(0, total_scheduled_hours - downtime_hours)
+
+        # Performance
+        # Simulate minor stops and reduced speed
+        performance_factor = random.uniform(0.90, 0.98) if operating_hours > 0 else 0
+        effective_operating_hours = operating_hours * performance_factor
+
+        total_parts_produced = int((effective_operating_hours * 3600) / ideal_cycle_time_s)
+
+        # Quality
+        quality_factor = random.uniform(0.95, 0.995) if total_parts_produced > 0 else 0
+        good_parts_produced = int(total_parts_produced * quality_factor)
+
+        production_data.append({
+            "Date": date_str,
+            "EquipmentID": eq_id,
+            "TotalPartsProduced": total_parts_produced,
+            "GoodPartsProduced": good_parts_produced,
+            "DowntimeHours": round(downtime_hours, 2),
+            "OperatingHours": round(operating_hours, 2),
+            "IdealCycleTime_s": ideal_cycle_time_s
+        })
+
+    current_date += timedelta(days=1)
+
+df_prod = pd.DataFrame(production_data)
+df_prod.to_csv(f"{OUTPUT_DIR}/Fact_Production_Data.csv", index=False)
+print("Generated Fact_Production_Data.csv")
+
+
+# 8. Fact_Budget_vs_Actual (Replaces Fact_Costs)
 budget_data = []
 cost_centers = ["CC_Maint_Heavy", "CC_Maint_Plant", "CC_Ops_Mining", "CC_Ops_Process"]
 gl_accounts = ["GL_5001_Spares", "GL_5002_Labor", "GL_5003_Contractors", "GL_5004_Consumables"]

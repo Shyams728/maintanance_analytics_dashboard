@@ -55,6 +55,15 @@ def process_products():
     
     return df
 
+def process_production_data():
+    """Loads and checks the production data."""
+    df = pd.read_csv(os.path.join(DATA_DIR, "Fact_Production_Data.csv"))
+    # Basic check, can be expanded
+    assert "Date" in df.columns
+    assert "EquipmentID" in df.columns
+    assert "GoodPartsProduced" in df.columns
+    return df
+
 def main():
     print("Preprocessing data...")
     
@@ -74,6 +83,12 @@ def main():
     df_prod = process_products()
     df_prod.to_csv(os.path.join(DATA_DIR, "Dim_Product_Enriched.csv"), index=False)
     print(f"Generated Dim_Product_Enriched.csv ({len(df_prod)} rows)")
+
+    # 3. Process Production Data
+    df_oee = process_production_data()
+    # For now, we just copy it over, but enrichment could happen here
+    df_oee.to_csv(os.path.join(DATA_DIR, "Fact_Production_Data_Enriched.csv"), index=False)
+    print(f"Generated Fact_Production_Data_Enriched.csv ({len(df_oee)} rows)")
     
     print("Preprocessing complete.")
 

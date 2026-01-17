@@ -314,3 +314,27 @@ def get_gauge_color(value: float, thresholds: tuple = (70, 90)) -> str:
         return COLORS['warning']
     else:
         return COLORS['success']
+
+def get_kpi_hints():
+    """Returns a dictionary of KPI hints."""
+    return {
+        "OEE_Pct": "Overall Equipment Effectiveness: A measure of how well a manufacturing operation is utilized.",
+        "Availability_Pct": "The percentage of scheduled time that the equipment is available to operate.",
+        "MTTR_Hours": "Mean Time To Repair: The average time required to repair a failed component or device.",
+        "MTBF_Hours": "Mean Time Between Failures: The predicted elapsed time between inherent failures of a mechanical or electronic system.",
+        "Planned_Maintenance_Pct": "The percentage of maintenance work that is planned, rather than reactive."
+    }
+
+def kpi_card(title, value, hint, sub_value=None):
+    """Generates a KPI card with a title, value, and hint."""
+
+    sub_value_html = f'<p style="font-size: 0.9rem; color: #bbb;">{sub_value}</p>' if sub_value else ""
+
+    st.markdown(f"""
+    <div style="background-color: #222; border-radius: 10px; padding: 20px; text-align: center;">
+        <h3 style="color: #fff;">{title}</h3>
+        <p style="font-size: 2rem; font-weight: bold; color: #00bfff;">{value}</p>
+        {sub_value_html}
+        <p style="font-size: 0.9rem; color: #bbb;">{hint}</p>
+    </div>
+    """, unsafe_allow_html=True)
