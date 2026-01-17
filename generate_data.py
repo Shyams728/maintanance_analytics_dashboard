@@ -3,16 +3,24 @@ import random
 import os
 from datetime import datetime, timedelta
 import numpy as np
+from sqlalchemy import create_engine
 
 # Configuration
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 OUTPUT_DIR = os.path.join(BASE_DIR, "data")
+DB_PATH = os.path.join(OUTPUT_DIR, "analytics.db")
+DB_ENGINE = create_engine(f"sqlite:///{DB_PATH}")
 START_DATE = datetime(2024, 1, 1)
 END_DATE = datetime(2025, 12, 31)
 NUM_DAYS = (END_DATE - START_DATE).days + 1
 
 # Create output directory
 os.makedirs(OUTPUT_DIR, exist_ok=True)
+
+# Remove old DB file
+if os.path.exists(DB_PATH):
+    os.remove(DB_PATH)
+    print(f"Removed old database file: {DB_PATH}")
 
 # Helper function for random dates
 def random_date(start, end):
