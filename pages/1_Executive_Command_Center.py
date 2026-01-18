@@ -96,7 +96,7 @@ section_header("Overall Performance", "🚀")
 
 col1, col2 = st.columns(2)
 with col1:
-    oee_trend = df_wo_filtered.resample('M', on='Date').apply(lambda x: calculate_oee(x, len(df_equip), 30, 120, x['TotalPartsProduced'].sum(), x['GoodPartsProduced'].sum())['OEE_Pct']).fillna(0)
+    oee_trend = df_oee_filtered.resample('M', on='Date').apply(lambda x: calculate_oee(x)['OEE_Pct']).fillna(0)
     sparkline = go.Figure(go.Scatter(
         x=oee_trend.index, y=oee_trend.values,
         mode='lines', fill='tozeroy', line_color='#00bfff',
